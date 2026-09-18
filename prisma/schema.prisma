@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(cuid())
+  name             String?
+  email            String   @unique
+  passwordHash     String?
+  emailVerified    DateTime?
+  image            String?
+  role             String   @default("user")
+  sessionVersion   Int      @default(0)
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  accounts         Account[]
+  sessions         Session[]
+  subscription     Subscription?
+  transactions     Transaction[]
+  tickets          Ticket[]
+  notifications    Notification[]
+  activities       Activity[]
+  usage            Usage?
+  tokens           EmailToken[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model EmailToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  purpose   String
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  description  String
+  monthlyPrice Int
+  yearlyPrice  Int
+  currency     String   @default("BDT")
+  features     Json
+  highlighted  Boolean  @default(false)
+  active       Boolean  @default(true)
+  trialDays    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  planId               String?
+  status               String   @default("free")
+  billingCycle         String   @default("monthly")
+  unitAmount           Int      @default(0)
+  currency             String   @default("BDT")
+  provider             String?
+  providerSubscriptionId String? @unique
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  trialUsed            Boolean  @default(false)
+  cancelAtPeriodEnd    Boolean  @default(false)
+  cancelledAt          DateTime?
+  endedAt              DateTime?
+  providerEventCreated Int      @default(0)
+  checkoutSessionId    String?  @unique
+  checkoutUrl          String?
+  checkoutExpiresAt    DateTime?
+  checkoutKey          String?
+  checkoutRequestHash  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 Plan?    @relation(fields: [planId], references: [id])
+  @@index([status])
+}
+
+model Transaction {
+  id                 String   @id @default(cuid())
+  userId             String
+  amount             Int
+  currency           String   @default("BDT")
+  status             String
+  description        String
+  provider           String   @default("stripe")
+  providerInvoiceId  String?  @unique
+  providerPaymentId  String?
+  invoiceUrl         String?
+  paidAt             DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model Coupon {
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  percentOff          Int
+  active              Boolean  @default(true)
+  expiresAt           DateTime?
+  maxRedemptions       Int?
+  redemptions         Int      @default(0)
+  providerCouponId    String?  @unique
+  providerPromotionId String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  userId    String
+  subject   String
+  message   String
+  locale    String   @default("en")
+  status    String   @default("open")
+  reply     String?
+  repliedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([userId, createdAt])
+}
+
+model Usage {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  toolsUsed    Int      @default(0)
+  toolsLimit   Int      @default(10)
+  storageUsed  Int      @default(0)
+  storageLimit Int      @default(100)
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model WebhookEvent {
+  id        String   @id
+  type      String
+  created   Int
+  handledAt DateTime @default(now())
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
